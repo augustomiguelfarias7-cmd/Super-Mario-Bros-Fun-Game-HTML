@@ -2,14 +2,64 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Super Mario Bros Fun Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Super Mario Bros - 6 Fases + Bowser Boss (Mario 3 style)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+*{user-select:none;-webkit-user-select:none;touch-action:manipulation;}
+body{font-family:'Press Start 2P',cursive;background:#0b0f19;color:white;overflow:hidden;}
+canvas{image-rendering:pixelated;image-rendering:crisp-edges;box-shadow:0 20px 50px rgba(0,0,0,.9);}
+.touch-btn{background:rgba(255,255,255,.25);border:2px solid rgba(255,255,255,.6);backdrop-filter:blur(4px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;touch-action:none;}
+.touch-btn:active{background:rgba(255,255,255,.6);transform:scale(.92);}
+#gpIndicator{position:fixed;bottom:4px;right:6px;font-size:8px;color:#555;font-family:'Press Start 2P',cursive;}
+</style>
 </head>
-<body style="font-family:sans-serif;background:#0b0f19;color:white;text-align:center;padding:50px;">
-<h1>Super Mario Bros. Fun Game HTML</h1>
-<p>Desenvolvedor: <b>Augusto Miguel de Farias</b></p>
-<p>Isso é uma fãgame feita por diversão.</p>
-<p>O arquivo completo do jogo (index.html com todo o código) está no repositório.<br>
-Se você está vendo esta mensagem, faça upload do arquivo completo via GitHub web ou git push.</p>
-<p><a href="https://github.com/augustomiguelfarias7-cmd/Super-Mario-Bros-Fun-Game-HTML" style="color:#fcdd00">Voltar ao repositório</a></p>
+<body class="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4 select-none">
+<div id="gpIndicator">🎮 --</div>
+<div class="relative w-full max-w-4xl flex flex-col items-center">
+  <div class="w-full bg-black border-4 border-yellow-500 rounded-t-lg p-3 flex justify-between items-center text-[9px] sm:text-xs text-yellow-300 tracking-widest shadow-lg">
+    <div class="flex flex-col items-start"><span class="text-white">MARIO</span><span id="score">000000</span></div>
+    <div class="flex flex-col items-center"><span class="text-yellow-400">MOEDAS</span><span id="coins">🪙 x00</span></div>
+    <div class="flex flex-col items-center"><span class="text-white">MUNDO</span><span id="worldDisplay">1-1</span></div>
+    <div class="flex flex-col items-center"><span class="text-white">TEMPO</span><span id="timer">400</span></div>
+    <div class="flex flex-col items-center"><span class="text-green-400">POWER</span><span id="powerDisplay">SMALL</span></div>
+  </div>
+  <div class="relative w-full overflow-hidden bg-black flex justify-center items-center border-4 border-t-0 border-yellow-500 rounded-b-lg">
+    <canvas id="gameCanvas" width="512" height="448" class="w-full h-auto max-h-[70vh] aspect-[8/7] block"></canvas>
+    <div id="overlay" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center z-20">
+      <h1 id="overlayTitle" class="text-xl sm:text-3xl text-red-500 mb-3 animate-bounce">SUPER MARIO BROS</h1>
+      <p id="overlaySubtitle" class="text-[10px] sm:text-xs text-yellow-300 mb-5 leading-relaxed max-w-md">6 Fases · Bowser Boss · Princesa Peach · Gamepad · Touch!</p>
+      <button id="startBtn" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm border-4 border-white rounded-lg cursor-pointer">▶ INICIAR</button>
+      <div class="mt-4 text-[8px] sm:text-[10px] text-gray-300 max-w-md text-left leading-normal space-y-1 bg-gray-900/90 p-3 rounded border border-gray-700">
+        <p class="text-yellow-400 font-bold mb-1">🎮 Controles:</p>
+        <p>• <b>Teclado:</b> Setas/A-D · Z/Espaço(pulo) · X/Shift(ataque)</p>
+        <p>• <b>Gamepad:</b> Suporte automático se conectado!</p>
+        <p class="text-orange-300 mt-1">🔥 BOWSER (Mario 3 style): Pule EMBAIXO das plataformas pra VIRAR ele de barriga! Depois PISA no casco. Cuidado que ele gira e te fode!</p>
+        <p class="text-pink-300 mt-1">👸 Salve a Princesa Peach no Castelo! Agache (S/↓) pros fogos dele.</p>
+      </div>
+    </div>
+  </div>
+  <div class="w-full mt-3 grid grid-cols-2 gap-4">
+    <div class="flex items-center justify-start space-x-3 pl-2">
+      <button id="btnLeft" class="touch-btn w-14 h-14 bg-gray-800 text-2xl">◀</button>
+      <button id="btnRight" class="touch-btn w-14 h-14 bg-gray-800 text-2xl">▶</button>
+      <button id="btnDown" class="touch-btn w-10 h-10 bg-gray-700 text-xl">▼</button>
+    </div>
+    <div class="flex items-center justify-end space-x-3 pr-2">
+      <button id="btnRun" class="touch-btn w-14 h-14 bg-red-600 border-red-300 text-[8px] font-bold">FIRE/<br>HAMMER</button>
+      <button id="btnJump" class="touch-btn w-16 h-16 bg-yellow-500 border-yellow-200 text-xs font-bold">JUMP</button>
+    </div>
+  </div>
+</div>
+
+<!-- O RESTO DO CÓDIGO COMPLETO DO JOGO ESTÁ NO ARQUIVO LOCAL. PARA EVITAR LIMITES DE TAMANHO NA API, O ARQUIVO COMPLETO FOI PREPARADO. SE ESTE COMMIT FICOU INCOMPLETO, BAIXE O ARQUIVO DO CHAT E FAÇA UPLOAD. -->
+<script>
+console.log("Super Mario Bros Fun Game - Desenvolvedor: Augusto Miguel de Farias");
+console.log("Isso é uma fãgame feita por diversão.");
+// O código completo (sprites, lógica do Bowser, 6 fases, etc) está no arquivo original de 63kb.
+// Para ter o jogo funcionando 100%, substitua este index.html pelo arquivo completo mario-bowser.html do chat.
+alert("Arquivo parcial por limite de tamanho da API.\nBaixe o mario-bowser.html completo do chat com o Grok e faça upload no repositório.\n\nDesenvolvedor: Augusto Miguel de Farias\nFãgame por diversão.");
+</script>
 </body>
 </html>
