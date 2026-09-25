@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Super Mario Bros - 6 Fases + Bowser Boss (Mario 3 style)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+*{user-select:none;-webkit-user-select:none;touch-action:manipulation;}
+body{font-family:'Press Start 2P',cursive;background:#0b0f19;color:white;overflow:hidden;}
+canvas{image-rendering:pixelated;image-rendering:crisp-edges;box-shadow:0 20px 50px rgba(0,0,0,.9);}
+.touch-btn{background:rgba(255,255,255,.25);border:2px solid rgba(255,255,255,.6);backdrop-filter:blur(4px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;touch-action:none;}
+.touch-btn:active{background:rgba(255,255,255,.6);transform:scale(.92);}
+#gpIndicator{position:fixed;bottom:4px;right:6px;font-size:8px;color:#555;font-family:'Press Start 2P',cursive;}
+</style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-2 sm:p-4 select-none">
+<div id="gpIndicator">🎮 --</div>
+<div class="relative w-full max-w-4xl flex flex-col items-center">
+  <div class="w-full bg-black border-4 border-yellow-500 rounded-t-lg p-3 flex justify-between items-center text-[9px] sm:text-xs text-yellow-300 tracking-widest shadow-lg">
+    <div class="flex flex-col items-start"><span class="text-white">MARIO</span><span id="score">000000</span></div>
+    <div class="flex flex-col items-center"><span class="text-yellow-400">MOEDAS</span><span id="coins">🪙 x00</span></div>
+    <div class="flex flex-col items-center"><span class="text-white">MUNDO</span><span id="worldDisplay">1-1</span></div>
+    <div class="flex flex-col items-center"><span class="text-white">TEMPO</span><span id="timer">400</span></div>
+    <div class="flex flex-col items-center"><span class="text-green-400">POWER</span><span id="powerDisplay">SMALL</span></div>
+  </div>
+  <div class="relative w-full overflow-hidden bg-black flex justify-center items-center border-4 border-t-0 border-yellow-500 rounded-b-lg">
+    <canvas id="gameCanvas" width="512" height="448" class="w-full h-auto max-h-[70vh] aspect-[8/7] block"></canvas>
+    <div id="overlay" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6 text-center z-20">
+      <h1 id="overlayTitle" class="text-xl sm:text-3xl text-red-500 mb-3 animate-bounce">SUPER MARIO BROS</h1>
+      <p id="overlaySubtitle" class="text-[10px] sm:text-xs text-yellow-300 mb-5 leading-relaxed max-w-md">6 Fases · Bowser Boss · Princesa Peach · Gamepad · Touch!</p>
+      <button id="startBtn" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm border-4 border-white rounded-lg cursor-pointer">▶ INICIAR</button>
+      <div class="mt-4 text-[8px] sm:text-[10px] text-gray-300 max-w-md text-left leading-normal space-y-1 bg-gray-900/90 p-3 rounded border border-gray-700">
+        <p class="text-yellow-400 font-bold mb-1">🎮 Controles:</p>
+        <p>• <b>Teclado:</b> Setas/A-D · Z/Espaço(pulo) · X/Shift(ataque)</p>
+        <p>• <b>Gamepad:</b> Suporte automático se conectado!</p>
+        <p class="text-orange-300 mt-1">🔥 BOWSER (Mario 3 style): Pule EMBAIXO das plataformas pra VIRAR ele de barriga! Depois PISA no casco. Cuidado que ele gira e te fode!</p>
+        <p class="text-pink-300 mt-1">👸 Salve a Princesa Peach no Castelo! Agache (S/↓) pros fogos dele.</p>
+      </div>
+    </div>
+  </div>
+  <div class="w-full mt-3 grid grid-cols-2 gap-4">
+    <div class="flex items-center justify-start space-x-3 pl-2">
+      <button id="btnLeft" class="touch-btn w-14 h-14 bg-gray-800 text-2xl">◀</button>
+      <button id="btnRight" class="touch-btn w-14 h-14 bg-gray-800 text-2xl">▶</button>
+      <button id="btnDown" class="touch-btn w-10 h-10 bg-gray-700 text-xl">▼</button>
+    </div>
+    <div class="flex items-center justify-end space-x-3 pr-2">
+      <button id="btnRun" class="touch-btn w-14 h-14 bg-red-600 border-red-300 text-[8px] font-bold">FIRE/<br>HAMMER</button>
+      <button id="btnJump" class="touch-btn w-16 h-16 bg-yellow-500 border-yellow-200 text-xs font-bold">JUMP</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ======================== SOUND ========================
+class Sound{
+  constructor(){this.ctx=null;this.bgmLoop=null;}
+  init(){if(!this.ctx){const A=window.AudioContext||window.webkitAudioContext;this.ctx=new A();}if(this.ctx.state==='suspended')this.ctx.resume();}
+  tone(f,t,d,sv=0.2,ev=0.01){if(!this.ctx)return;try{const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=t;o.frequency.setValueAtTime(f,this.ctx.currentTime);g.gain.setValueAtTime(sv,this.ctx.currentTime);g.gain.exponentialRampToValueAtTime(ev,this.ctx.currentTime+d);o.connect(g);g.connect(this.ctx.destination);o.start();o.stop(this.ctx.currentTime+d);}catch(e){}}
+  sweep(sf,ef,t,d,v=0.2){if(!this.ctx)return;try{const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=t;o.frequency.setValueAtTime(sf,this.ctx.currentTime);o.frequency.exponentialRampToValueAtTime(ef,this.ctx.currentTime+d);g.gain.setValueAtTime(v,this.ctx.currentTime);g.gain.linearRampToValueAtTime(0.01,this.ctx.currentTime+d);o.connect(g);g.connect(this.ctx.destination);o.start();o.stop(this.ctx.currentTime+d);}catch(e){}}
+  jump(){this.sweep(150,600,'square',.18,.2);}
+  coin(){this.tone(988,'sine',.08,.25);setTimeout(()=>this.tone(1319,'sine',.25,.25),80);}
+  stomp(){this.sweep(250,50,'triangle',.12,.35);}
+  powerupSpawn(){this.sweep(300,800,'sawtooth',.3,.2);}
+  powerup(){[330,392,659,523,587,784].forEach((f,i)=>setTimeout(()=>this.tone(f,'square',.08,.2),i*50));}
+  // star() removido
+  brickBreak(){this.sweep(180,40,'square',.15,.3);}
+  fireball(){this.sweep(700,200,'triangle',.1,.2);}
+  hammerThrow(){this.sweep(400,150,'square',.12,.25);}
+  pipe(){this.sweep(160,60,'square',.25,.25);}
+  bulletBill(){this.sweep(300,150,'square',.2,.2);}
+  bowserRoar(){[80,60,80,60,80].forEach((f,i)=>setTimeout(()=>this.tone(f,'sawtooth',.15,.4),i*80));}
+  bowserHit(){this.sweep(200,50,'sawtooth',.25,.5);}
+  bowserDead(){[440,392,349,294,247,220,196].forEach((f,i)=>setTimeout(()=>this.tone(f,'sawtooth',.12,.3),i*80));}
+  fireTrap(){this.sweep(800,200,'sawtooth',.15,.25);}
+  die(){[500,400,300,200,150].forEach((f,i)=>setTimeout(()=>this.tone(f,'sawtooth',.12,.25),i*100));}
+  victory(){const ns=[523,659,784,1047,784,659,523];ns.forEach((f,i)=>setTimeout(()=>this.tone(f,'square',.15,.3),i*120));}
+  startBGM(idx=0){
+    if(this.bgmLoop)clearInterval(this.bgmLoop);
+    const themes=[
+      [{f:659},{f:659},{r:1},{f:659},{r:1},{f:523},{f:659},{r:2},{f:784},{r:3},{f:392},{r:3}],
+      [{f:392},{f:440},{f:494},{f:523},{f:440},{r:2},{f:349},{f:330}],
+      [{f:220},{f:233},{f:247},{f:220},{r:3},{f:196},{f:165}],
+      [{f:523},{f:659},{f:784},{f:523},{f:659},{f:784},{r:1},{f:698}],
+      [{f:880},{f:988},{f:1047},{f:880},{r:1},{f:784},{f:659}],
+      // Bowser BGM — sombrio e pesado
+      [{f:110},{r:1},{f:110},{r:2},{f:147},{r:1},{f:131},{r:2},{f:110},{r:3}]
+    ];
+    const notes=themes[Math.min(idx,themes.length-1)];
+    let s=0;
+    this.bgmLoop=setInterval(()=>{if(!this.ctx)return;const n=notes[s];if(n&&n.f)this.tone(n.f,'square',.1,.05,.01);s=(s+1)%notes.length;},170);
+  }
+  stopBGM(){if(this.bgmLoop){clearInterval(this.bgmLoop);this.bgmLoop=null;}}
+}
+const sound=new Sound();
+
+// ======================== SPRITES ========================
+const C={RED:'#d82800',BROWN:'#887000',SKIN:'#fc9838',BLUE:'#0000fc',WHITE:'#f8f8f8',BLACK:'#000000',GREEN:'#00a800',YELLOW:'#fcdd00',ORANGE:'#f85808',BRICK:'#c84c0c',PDARK:'#007000',PLIGHT:'#58d854',HAT:'#ffcc00',BSUIT:'#e65c00',PURPLE:'#8800cc',GREY:'#888888',DGREY:'#444444',PINK:'#ff88cc',DKGRN:'#003300',LAVA:'#ff4400',LAVAL:'#ff8800'};
+
+function spr(mat,pal,w,h){const cv=document.createElement('canvas');cv.width=w;cv.height=h;const cx=cv.getContext('2d');const pw=w/mat[0].length,ph=h/mat.length;for(let r=0;r<mat.length;r++)for(let c=0;c<mat[r].length;c++){const k=mat[r][c];if(k&&pal[k]){cx.fillStyle=pal[k];cx.fillRect(c*pw,r*ph,pw,ph);}}return cv;}
+
+const M_S=[[0,0,0,1,1,1,1,1,0,0,0,0],[0,0,1,1,1,1,1,1,1,1,1,0],[0,0,2,2,2,3,3,2,3,0,0,0],[0,2,3,2,3,3,3,2,3,3,3,0],[0,2,3,2,2,3,3,3,2,3,3,3],[0,2,2,3,3,3,3,2,2,2,2,0],[0,0,0,3,3,3,3,3,3,3,0,0],[0,0,2,2,1,2,2,2,0,0,0,0],[0,2,2,2,1,2,2,1,2,2,2,0],[2,2,2,2,1,1,1,1,2,2,2,2],[3,3,2,1,3,1,1,3,1,2,3,3],[3,3,3,1,1,1,1,1,1,3,3,3],[3,3,1,1,1,1,1,1,1,1,3,3],[0,0,1,1,1,0,0,1,1,1,0,0],[0,2,2,2,0,0,0,0,2,2,2,0],[2,2,2,2,0,0,0,0,2,2,2,2]];
+const M_W=[[0,0,0,1,1,1,1,1,0,0,0,0],[0,0,1,1,1,1,1,1,1,1,1,0],[0,0,2,2,2,3,3,2,3,0,0,0],[0,2,3,2,3,3,3,2,3,3,3,0],[0,2,3,2,2,3,3,3,2,3,3,3],[0,2,2,3,3,3,3,2,2,2,2,0],[0,0,0,3,3,3,3,3,3,3,0,0],[0,0,0,2,2,1,2,2,0,0,0,0],[0,0,2,2,2,1,2,2,2,0,0,0],[0,2,2,2,2,1,1,2,2,2,0,0],[3,3,2,2,1,3,1,1,2,2,3,3],[3,3,3,1,1,1,1,1,1,3,3,3],[3,3,1,1,1,1,1,1,1,1,3,3],[0,0,1,1,1,0,0,1,1,1,0,0],[0,0,2,2,2,0,0,2,2,2,0,0],[0,0,0,0,0,0,0,2,2,2,2,0]];
+const M_J=[[0,0,0,1,1,1,1,1,0,0,0,0],[0,0,1,1,1,1,1,1,1,1,1,0],[0,0,2,2,2,3,3,2,3,0,0,0],[0,2,3,2,3,3,3,2,3,3,3,0],[0,2,3,2,2,3,3,3,2,3,3,3],[0,2,2,3,3,3,3,2,2,2,2,0],[0,0,0,3,3,3,3,3,3,3,0,0],[0,3,3,2,1,2,2,2,3,3,0,0],[2,2,2,2,1,2,2,1,2,2,2,2],[2,2,2,2,1,1,1,1,2,2,2,2],[3,3,2,1,3,1,1,3,1,2,3,3],[0,0,3,1,1,1,1,1,1,3,0,0],[0,0,1,1,1,1,1,1,1,1,0,0],[0,2,2,2,0,0,0,0,2,2,2,0],[2,2,2,2,0,0,0,0,2,2,2,2],[0,0,0,0,0,0,0,0,0,0,0,0]];
+const M_DK=[[0,0,0,1,1,1,1,1,0,0,0,0],[0,0,1,1,1,1,1,1,1,1,1,0],[0,0,2,2,2,3,3,2,3,0,0,0],[0,2,3,2,3,3,3,2,3,3,3,0],[0,2,3,2,2,3,3,3,2,3,3,3],[0,2,2,3,3,3,3,2,2,2,2,0],[0,0,0,3,3,3,3,3,3,3,0,0],[0,0,2,2,1,2,2,2,0,0,0,0],[0,2,2,2,1,2,2,1,2,2,2,0],[2,2,2,2,1,1,1,1,2,2,2,2],[3,3,2,1,3,1,1,3,1,2,3,3],[3,3,3,1,1,1,1,1,1,3,3,3],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0]];
+const M_BLD=[[0,0,4,4,4,4,4,4,4,4,0,0],[0,4,4,4,4,4,4,4,4,4,4,0],[0,0,2,2,2,3,3,2,3,0,0,0],[0,2,3,2,3,3,3,2,3,3,3,0],[0,2,3,2,2,3,3,3,2,3,3,3],[0,2,2,3,3,3,3,2,2,2,2,0],[0,0,0,3,3,3,3,3,3,3,0,0],[0,0,5,5,1,5,5,5,0,0,0,0],[0,5,5,5,1,5,5,1,5,5,5,0],[5,5,5,5,1,1,1,1,5,5,5,5],[3,3,5,1,3,1,1,3,1,5,3,3],[3,3,3,1,1,1,1,1,1,3,3,3],[3,3,1,1,1,1,1,1,1,1,3,3],[0,0,1,1,1,0,0,1,1,1,0,0],[0,2,2,2,0,0,0,0,2,2,2,0],[2,2,2,2,0,0,0,0,2,2,2,2]];
+// M_MINI removido
+
+const G_MAT=[[0,0,0,0,1,1,1,1,0,0,0,0],[0,0,0,1,1,1,1,1,1,0,0,0],[0,0,1,1,1,1,1,1,1,1,0,0],[0,1,1,1,2,2,1,1,2,2,1,0],[1,1,1,2,3,2,1,2,3,2,1,1],[1,1,1,2,3,2,1,2,3,2,1,1],[1,1,1,1,2,2,1,1,2,2,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,1,1,1,0,0],[0,2,2,2,2,0,0,2,2,2,2,0],[2,2,2,2,2,0,0,2,2,2,2,2]];
+const G_SQ=[[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,1,1,1,1,1,1,0,0,0],[0,1,1,1,2,2,1,1,2,2,1,0],[1,1,1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1,1,1],[0,2,2,2,2,0,0,2,2,2,2,0],[2,2,2,2,2,0,0,2,2,2,2,2]];
+const K_W=[[0,0,0,0,0,1,1,1,1,0,0,0],[0,0,0,0,1,2,2,2,2,1,0,0],[0,0,0,0,1,2,3,2,3,1,0,0],[0,0,0,0,1,2,2,2,2,1,0,0],[0,0,0,0,0,1,1,1,1,0,0,0],[0,0,0,1,1,4,4,4,1,1,0,0],[0,0,1,4,4,4,4,4,4,4,1,0],[0,1,4,4,4,4,4,4,4,4,4,1],[0,1,4,4,4,4,4,4,4,4,4,1],[0,1,4,4,4,4,4,4,4,4,4,1],[0,0,1,4,4,4,4,4,4,4,1,0],[0,0,0,1,1,1,1,1,1,1,0,0],[0,0,0,2,2,0,0,2,2,0,0,0],[0,0,2,2,2,0,0,2,2,2,0,0],[0,0,2,2,2,0,0,2,2,2,0,0]];
+const K_SH=[[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,1,1,1,1,0,0,0,0],[0,0,1,1,4,4,4,4,1,1,0,0],[0,1,4,4,4,3,3,4,4,4,1,0],[1,4,4,4,3,3,3,3,4,4,4,1],[1,4,4,3,3,3,3,3,3,4,4,1],[1,4,4,3,3,3,3,3,3,4,4,1],[1,4,4,4,3,3,3,3,4,4,4,1],[0,1,4,4,4,3,3,4,4,4,1,0],[0,0,1,1,4,4,4,4,1,1,0,0],[0,0,0,0,1,1,1,1,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0]];
+const MUSH=[[0,0,0,0,1,1,1,1,0,0,0,0],[0,0,1,1,2,2,2,2,1,1,0,0],[0,1,2,2,2,2,2,2,2,2,1,0],[0,1,2,3,3,2,2,3,3,2,1,0],[1,2,2,3,3,2,2,3,3,2,2,1],[1,2,2,2,2,2,2,2,2,2,2,1],[1,2,2,2,2,2,2,2,2,2,2,1],[0,1,1,3,3,3,3,3,3,1,1,0],[0,0,1,3,3,3,3,3,3,1,0,0],[0,0,1,3,3,3,3,3,3,1,0,0],[0,0,1,3,3,3,3,3,3,1,0,0],[0,0,0,1,1,1,1,1,1,0,0,0]];
+const FLOW=[[0,0,0,0,1,1,1,1,0,0,0,0],[0,0,0,1,2,2,2,2,1,0,0,0],[0,0,1,2,3,3,3,3,2,1,0,0],[0,0,1,2,3,1,1,3,2,1,0,0],[0,0,1,2,3,1,1,3,2,1,0,0],[0,0,1,2,3,3,3,3,2,1,0,0],[0,0,0,1,2,2,2,2,1,0,0,0],[0,0,0,0,4,4,4,4,0,0,0,0],[0,0,4,4,4,4,4,4,4,4,0,0],[0,4,4,0,0,4,4,0,0,4,4,0],[0,4,0,0,0,4,4,0,0,0,4,0],[0,0,0,0,0,4,4,0,0,0,0,0]];
+const HAMIT=[[0,0,0,1,1,1,1,1,0,0],[0,0,1,1,1,1,1,1,1,0],[0,0,1,1,1,1,1,1,1,0],[0,0,0,1,1,1,1,1,0,0],[0,0,0,0,2,2,0,0,0,0],[0,0,0,0,2,2,0,0,0,0],[0,0,0,0,2,2,0,0,0,0],[0,0,0,0,2,2,0,0,0,0],[0,0,0,0,2,2,0,0,0,0],[0,0,0,0,2,2,0,0,0,0]];
+const HBRO=[[0,0,0,1,1,1,1,1,0,0,0,0],[0,0,1,1,1,1,1,1,1,1,0,0],[0,0,2,2,2,3,3,2,3,0,0,0],[0,2,3,2,3,3,3,2,3,3,0,0],[0,0,1,1,1,1,1,1,1,1,0,0],[0,1,1,4,4,4,4,4,4,1,1,0],[1,1,4,4,4,4,4,4,4,4,1,1],[1,1,4,4,4,4,4,4,4,4,1,1],[0,0,1,1,1,1,1,1,1,1,0,0],[0,0,2,2,0,0,0,0,2,2,0,0],[0,2,2,2,0,0,0,0,2,2,2,0]];
+const BULL=[[0,0,1,1,1,1,1,1,0,0],[0,1,1,2,2,2,2,1,1,0],[1,1,2,2,2,2,2,2,1,1],[1,2,2,3,3,2,2,2,2,1],[1,2,2,3,3,2,2,2,2,1],[1,1,2,2,2,2,2,2,1,1],[0,1,1,2,2,2,2,1,1,0],[0,0,1,1,1,1,1,1,0,0]];
+// BOO, STAR e MINI removidos pra aliviar o arquivo
+
+// BOWSER SPRITE (inspirado no SMB original, 16x20 pixels)
+const BOWSER_M=[
+  [0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,1,2,2,1,1,1,2,2,1,1,0,0,0],
+  [0,1,1,2,3,3,2,1,2,3,3,2,1,1,0,0],
+  [0,1,2,2,3,3,2,2,2,3,3,2,2,1,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,1,4,4],
+  [4,1,2,3,3,2,2,2,2,2,3,3,2,1,4,4],
+  [4,1,2,2,2,2,2,2,2,2,2,2,2,1,4,0],
+  [0,1,1,1,2,5,5,5,5,5,2,1,1,1,0,0],
+  [0,0,1,5,5,5,5,5,5,5,5,5,1,0,0,0],
+  [0,0,1,5,5,6,5,5,5,6,5,5,1,0,0,0],
+  [0,0,1,5,5,5,5,5,5,5,5,5,1,0,0,0],
+  [0,0,1,1,5,5,5,5,5,5,1,1,0,0,0,0],
+  [0,0,0,1,1,1,5,5,1,1,1,0,0,0,0,0],
+  [0,0,2,2,1,1,1,1,1,1,2,2,0,0,0,0],
+  [0,2,2,2,2,1,0,0,1,2,2,2,2,0,0,0],
+  [0,0,2,2,0,0,0,0,0,0,2,2,0,0,0,0],
+  [0,0,2,0,0,0,0,0,0,0,0,2,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+];
+const BOWSER_DEAD=[
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0],
+  [0,0,1,5,5,5,5,5,5,5,5,1,0,0,0,0],
+  [0,0,1,5,6,5,5,5,5,6,5,1,0,0,0,0],
+  [0,0,1,5,5,5,5,5,5,5,5,1,0,0,0,0],
+  [0,1,1,1,5,5,5,5,5,5,1,1,1,0,0,0],
+  [0,1,2,2,1,1,5,5,1,1,2,2,1,0,0,0],
+  [0,1,2,1,1,2,1,1,2,1,1,2,1,0,0,0],
+  [0,0,2,1,2,2,0,0,2,2,1,2,0,0,0,0],
+  [0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+];
+
+// PRINCESA PEACH SPRITE (pixelado, estilo SMB1)
+const PEACH_M=[
+  [0,0,0,0,1,1,1,1,1,0,0,0],
+  [0,0,0,1,1,2,2,2,1,1,0,0],
+  [0,0,0,1,2,2,2,2,2,1,0,0],
+  [0,0,0,1,2,3,2,3,2,1,0,0],
+  [0,0,0,1,2,2,2,2,2,1,0,0],
+  [0,0,4,4,4,4,4,4,4,4,4,0],
+  [0,4,4,4,4,4,4,4,4,4,4,4],
+  [0,4,5,4,4,4,4,4,4,4,5,4],
+  [0,4,4,4,4,5,5,4,4,4,4,4],
+  [0,0,4,4,4,4,4,4,4,4,4,0],
+  [0,0,4,6,4,4,4,4,4,6,4,0],
+  [0,4,6,6,4,4,4,4,4,6,6,4],
+  [4,6,6,6,0,0,0,0,0,6,6,6],
+  [0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0]
+];
+
+const PAL_M={1:C.RED,2:C.BROWN,3:C.SKIN};
+const PAL_F={1:C.WHITE,2:C.RED,3:C.SKIN};
+const PAL_B={1:C.BLUE,2:C.BROWN,3:C.SKIN,4:C.HAT,5:C.BSUIT};
+const PAL_G={1:C.BRICK,2:C.BLACK,3:C.WHITE};
+const PAL_K={1:C.BLACK,2:C.SKIN,3:C.WHITE,4:C.GREEN};
+const PAL_MS={1:C.BLACK,2:C.RED,3:C.SKIN};
+const PAL_FL={1:C.BLACK,2:C.ORANGE,3:C.WHITE,4:C.GREEN};
+const PAL_H={1:C.WHITE,2:C.BROWN};
+const PAL_HB={1:C.BLACK,2:C.GREEN,3:C.SKIN,4:C.YELLOW};
+const PAL_BU={1:C.BLACK,2:C.DGREY,3:C.WHITE};
+const PAL_BW={1:C.DKGRN,2:C.YELLOW,3:C.WHITE,4:C.ORANGE,5:C.GREEN,6:C.RED};
+const PAL_PC={1:C.YELLOW,2:C.SKIN,3:C.BLACK,4:C.PINK,5:C.WHITE,6:C.RED};
+
+const Sp={
+  mSS:spr(M_S,PAL_M,16,16),mSW:spr(M_W,PAL_M,16,16),mSJ:spr(M_J,PAL_M,16,16),
+  mBS:spr(M_S,PAL_M,16,32),mBW:spr(M_W,PAL_M,16,32),mBJ:spr(M_J,PAL_M,16,32),
+  mFS:spr(M_S,PAL_F,16,32),mFW:spr(M_W,PAL_F,16,32),mFJ:spr(M_J,PAL_F,16,32),
+  mHS:spr(M_BLD,PAL_B,16,32),mHW:spr(M_BLD,PAL_B,16,32),mHJ:spr(M_BLD,PAL_B,16,32),
+  mDK:spr(M_DK,PAL_M,16,16), // agachado
+  mDKB:spr(M_DK,PAL_M,16,16),
+  goomba:spr(G_MAT,PAL_G,16,16),goombaSq:spr(G_SQ,PAL_G,16,16),
+  koopaW:spr(K_W,PAL_K,16,24),koopaS:spr(K_SH,PAL_K,16,16),
+  mush:spr(MUSH,PAL_MS,16,16),flower:spr(FLOW,PAL_FL,16,16),
+  hamItem:spr(HAMIT,PAL_H,16,16),hamBro:spr(HBRO,PAL_HB,20,24),
+  bullet:spr(BULL,PAL_BU,16,8),
+  bowser:spr(BOWSER_M,PAL_BW,48,60),bowserDead:spr(BOWSER_DEAD,PAL_BW,48,60),
+  peach:spr(PEACH_M,PAL_PC,36,48)
+};
+</script>
+
+<script>
+const canvas=document.getElementById('gameCanvas');
+const ctx=canvas.getContext('2d');
+const RT=32,GRAV=0.45;
+let gameState='START',currentLevel=0,score=0,coins=0,timeRemaining=400,timerInterval=null,cameraX=0;
+const keys={left:false,right:false,jump:false,run:false,down:false};
+let enemies=[],items=[],fireballs=[],thrownHammers=[],enemyHammers=[],bulletBills=[],bowserFireballs=[],fireTrap=[],popCoins=[],floatingTexts=[];
+let bowser=null;
+let endingScene=null; // cutscene final
+let controlsLocked=false; // trava controles no intro do Bowser
+let bowserIntroDone=false;
+
+function addScore(pts){score+=pts;document.getElementById('score').innerText=String(score).padStart(6,'0');}
+function addCoin(){coins++;document.getElementById('coins').innerText=`🪙 x${String(coins).padStart(2,'0')}`;}
+function floatTxt(x,y,text,color='#fff'){floatingTexts.push({x,y,text,color,life:55});}
+function overlap(a,b){return a.x<b.x+b.width&&a.x+a.width>b.x&&a.y<b.y+b.height&&a.y+a.height>b.y;}
+
+// ======================== GAMEPAD ========================
+let gpConnected=false;
+window.addEventListener('gamepadconnected',e=>{gpConnected=true;document.getElementById('gpIndicator').textContent='🎮 ON';document.getElementById('gpIndicator').style.color='#0f0';});
+window.addEventListener('gamepaddisconnected',e=>{gpConnected=false;document.getElementById('gpIndicator').textContent='🎮 --';document.getElementById('gpIndicator').style.color='#555';});
+function pollGamepad(){
+  if(!gpConnected)return;
+  const gpads=navigator.getGamepads?navigator.getGamepads():[];
+  for(const gp of gpads){
+    if(!gp)continue;
+    const ax=gp.axes[0]||0;
+    const prevRun=keys.run;
+    keys.left=(gp.buttons[14]&&gp.buttons[14].pressed)||ax<-0.5;
+    keys.right=(gp.buttons[15]&&gp.buttons[15].pressed)||ax>0.5;
+    keys.jump=(gp.buttons[0]&&gp.buttons[0].pressed)||(gp.buttons[2]&&gp.buttons[2].pressed);
+    keys.down=(gp.buttons[13]&&gp.buttons[13].pressed)||(gp.axes[1]>0.5);
+    const rNow=(gp.buttons[1]&&gp.buttons[1].pressed)||(gp.buttons[3]&&gp.buttons[3].pressed)||(gp.buttons[5]&&gp.buttons[5].pressed);
+    if(rNow&&!prevRun)actionTrigger();
+    keys.run=rNow;
+    break;
+  }
+}
+
+// ======================== MARIO ========================
+class Mario{
+  constructor(){this.reset();}
+  reset(){
+    this.x=50;this.y=300;this.vx=0;this.vy=0;this.w=RT;this.h=RT;
+    this.state='SMALL';this.grounded=false;this.facing='RIGHT';
+    this.invTimer=0;this.animT=0;this.frame=0;this.shellAngle=0;
+    this.crouching=false;
+    document.getElementById('powerDisplay').innerText='SMALL';
+  }
+  get width(){return this.w;}
+  get height(){return this.crouching&&this.state!=='SMALL'?RT:this.state==='SMALL'?RT:RT*2;}
+
+  update(map){
+    pollGamepad();
+    // trava controles no intro do Bowser
+    if(controlsLocked){
+      this.vx*=0.85;if(Math.abs(this.vx)<0.1)this.vx=0;
+      this.vy+=GRAV;if(this.vy>11)this.vy=11;
+      this.x+=this.vx;this.colX(map);
+      this.y+=this.vy;this.grounded=false;this.colY(map);
+      if(this.x<cameraX){this.x=cameraX;this.vx=0;}
+      if(this.invTimer>0)this.invTimer--;
+      return;
+    }
+    const isShell=this.state==='SHELL';
+    const maxSpd=isShell?5.8:keys.run?3.8:2.5;
+    const accel=isShell?0.4:0.25;
+    this.crouching=keys.down&&(this.state==='BIG'||this.state==='FIRE'||this.state==='HAMMER');
+
+    if(!this.crouching){
+      if(keys.left){this.vx=Math.max(this.vx-accel,-maxSpd);this.facing='LEFT';}
+      else if(keys.right){this.vx=Math.min(this.vx+accel,maxSpd);this.facing='RIGHT';}
+      else{this.vx*=0.82;if(Math.abs(this.vx)<0.1)this.vx=0;}
+    } else {this.vx*=0.9;}
+
+    if(Math.abs(this.vx)>0.2&&this.grounded){this.animT+=Math.abs(this.vx)*0.12;this.frame=Math.floor(this.animT)%2;}
+    else this.frame=0;
+    if(isShell)this.shellAngle+=Math.abs(this.vx)*0.15+0.2;
+
+    if(keys.jump&&this.grounded&&!this.crouching){
+      this.vy=-12.5;this.grounded=false;sound.jump();
+    }
+    if(!keys.jump&&this.vy<-3)this.vy*=0.6;
+    this.vy+=GRAV;if(this.vy>11)this.vy=11;
+
+    this.x+=this.vx;this.colX(map);
+    this.y+=this.vy;this.grounded=false;this.colY(map);
+    if(this.x<cameraX){this.x=cameraX;this.vx=0;}
+    if(this.invTimer>0)this.invTimer--;
+    if(this.y>canvas.height+50)this.die();
+  }
+  colX(map){for(const t of map.tiles(this.x,this.y,this.width,this.height)){if(t.solid){this.vx>0?this.x=t.x-this.width:this.x=t.x+t.w;this.vx=0;}}}
+  colY(map){for(const t of map.tiles(this.x,this.y,this.width,this.height)){if(t.solid){if(this.vy>0){this.y=t.y-this.height;this.vy=0;this.grounded=true;}else if(this.vy<0){this.y=t.y+t.h;this.vy=0;map.hitBlock(t.gx,t.gy,this);}}}}
+
+  powerUp(type){
+    sound.powerup();addScore(1000);
+    const big=this.state!=='SMALL';
+    if(type==='MUSHROOM'){if(!big){this.state='BIG';this.y-=RT;}}
+    else if(type==='FLOWER'){if(!big)this.y-=RT;this.state='FIRE';}
+    else if(type==='HAMMER'){if(!big)this.y-=RT;this.state='HAMMER';floatTxt(this.x,this.y-10,'MODO CONSTRUTOR!','#ffcc00');}
+    else if(type==='SHELL'){if(!big)this.y-=RT;this.state='SHELL';floatTxt(this.x,this.y-10,'⚡ CASCO!','#00ff66');}
+    document.getElementById('powerDisplay').innerText=this.state;
+  }
+  takeDamage(type='NORMAL'){
+    if(this.invTimer>0)return;
+    if(this.state==='SHELL'){floatTxt(this.x,this.y-10,'BLOQUEADO!','#00ff66');sound.stomp();return;}
+    if(this.state==='HAMMER'&&type==='NORMAL'){floatTxt(this.x,this.y-10,'BLOCKED!','#ffcc00');sound.stomp();return;}
+    if(this.state==='HAMMER'||this.state==='FIRE'){this.state='BIG';this.invTimer=60;sound.pipe();}
+    else if(this.state==='BIG'){this.state='SMALL';this.invTimer=60;sound.pipe();}
+    else this.die();
+    document.getElementById('powerDisplay').innerText=this.state;
+  }
+  die(){sound.die();sound.stopBGM();gameState='GAMEOVER';showOverlay('GAME OVER','Tente novamente!','▶ REINICIAR');}
+
+  draw(ctx){
+    const flash=this.invTimer>0&&Math.floor(Date.now()/50)%2===0;if(flash)return;
+    if(this.state==='SHELL'){
+      ctx.save();
+      const p=(Math.sin(Date.now()/100)+1)*6;
+      ctx.fillStyle='rgba(0,255,100,.35)';ctx.beginPath();ctx.arc(this.x-cameraX+this.w/2,this.y+this.h/2,this.w*.8+p,0,Math.PI*2);ctx.fill();
+      ctx.translate(this.x-cameraX+this.w/2,this.y+this.h/2);ctx.rotate(this.shellAngle);
+      ctx.drawImage(Sp.koopaS,-this.w/2,-this.h/4,this.w,RT);
+      ctx.fillStyle='#d82800';ctx.fillRect(-6,-12,12,6);
+      ctx.restore();return;
+    }
+
+    let sp;
+    if(this.crouching){sp=this.state==='FIRE'?Sp.mDKB:Sp.mDK;}
+    else if(this.state==='SMALL'){sp=!this.grounded?Sp.mSJ:this.frame===1?Sp.mSW:Sp.mSS;}
+    else if(this.state==='BIG'){sp=!this.grounded?Sp.mBJ:this.frame===1?Sp.mBW:Sp.mBS;}
+    else if(this.state==='FIRE'){sp=!this.grounded?Sp.mFJ:this.frame===1?Sp.mFW:Sp.mFS;}
+    else{sp=!this.grounded?Sp.mHJ:this.frame===1?Sp.mHW:Sp.mHS;}
+
+    ctx.save();
+    const dw=this.w,dh=this.height;
+    if(this.facing==='LEFT'){ctx.translate(this.x-cameraX+dw,this.y);ctx.scale(-1,1);ctx.drawImage(sp,0,0,dw,dh);}
+    else ctx.drawImage(sp,this.x-cameraX,this.y,dw,dh);
+    ctx.restore();
+  }
+}
+
+// ======================== PROJECTILES ========================
+class Hammer{constructor(x,y,facing){this.x=x;this.y=y;this.w=16;this.h=16;this.vx=facing==='RIGHT'?5.5:-5.5;this.vy=-7.5;this.active=true;this.angle=0;}update(){this.vy+=GRAV*.85;this.x+=this.vx;this.y+=this.vy;this.angle+=0.2;if(this.y>canvas.height+50||this.x<cameraX-50)this.active=false;}draw(ctx){ctx.save();ctx.translate(this.x-cameraX+8,this.y+8);ctx.rotate(this.angle);ctx.drawImage(Sp.hamItem,-8,-8,16,16);ctx.restore();}get width(){return this.w;}get height(){return this.h;}}
+class Fireball{constructor(x,y,facing){this.x=x;this.y=y;this.w=12;this.h=12;this.vx=facing==='RIGHT'?6:-6;this.vy=2;this.active=true;}update(map){this.vy+=GRAV;this.x+=this.vx;this.y+=this.vy;for(const t of map.tiles(this.x,this.y,this.w,this.h)){if(t.solid){this.vy>0?this.vy=-4:this.active=false;}}if(this.x<cameraX||this.x>cameraX+canvas.width+50||this.y>canvas.height)this.active=false;}draw(ctx){ctx.fillStyle='#f85808';ctx.beginPath();ctx.arc(this.x-cameraX+6,this.y+6,6,0,Math.PI*2);ctx.fill();}get width(){return this.w;}get height(){return this.h;}}
+class EnemyHammer{constructor(x,y){this.x=x;this.y=y;this.w=16;this.h=16;this.vx=mario.x<x?-4:4;this.vy=-6;this.active=true;}update(){this.vy+=GRAV;this.x+=this.vx;this.y+=this.vy;if(this.y>canvas.height+50)this.active=false;}draw(ctx){ctx.drawImage(Sp.hamItem,this.x-cameraX,this.y,16,16);}get width(){return this.w;}get height(){return this.h;}}
+class BulletBill{constructor(x,y,dir){this.x=x;this.y=y;this.w=32;this.h=16;this.vx=dir<0?-3.5:-3.5;this.vy=0;this.active=true;this.type='BULLET';}update(){if(mario.y+mario.height/2<this.y+this.h/2)this.vy-=0.05;else this.vy+=0.05;this.vy=Math.max(-1.5,Math.min(1.5,this.vy));this.x+=this.vx;this.y+=this.vy;if(this.x<cameraX-100||this.x>cameraX+canvas.width+100)this.active=false;}draw(ctx){ctx.save();if(this.vx>0){ctx.translate(this.x-cameraX+this.w,this.y);ctx.scale(-1,1);ctx.drawImage(Sp.bullet,0,0,this.w,this.h);}else ctx.drawImage(Sp.bullet,this.x-cameraX,this.y,this.w,this.h);ctx.restore();}get width(){return this.w;}get height(){return this.h;}}
+class BowserFireball{constructor(x,y){this.x=x;this.y=y;this.w=20;this.h=20;this.vx=-4;this.vy=0;this.active=true;this.angle=0;}update(){this.x+=this.vx;this.y+=Math.sin(this.angle)*2;this.angle+=0.1;if(this.x<cameraX-50)this.active=false;}draw(ctx){const p=(Math.sin(Date.now()/80)+1)*3;ctx.save();ctx.fillStyle=`rgba(255,${80+Math.floor(p*20)},0,0.9)`;ctx.beginPath();ctx.arc(this.x-cameraX+10,this.y+10,10+p*.5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffff00';ctx.beginPath();ctx.arc(this.x-cameraX+10,this.y+10,5,0,Math.PI*2);ctx.fill();ctx.restore();}get width(){return this.w;}get height(){return this.h;}}
+class PopCoin{constructor(x,y){this.x=x;this.y=y;this.sY=y;this.vy=-7;this.active=true;}update(){this.y+=this.vy;this.vy+=GRAV;if(this.y>=this.sY)this.active=false;}draw(ctx){ctx.fillStyle='#fcdd00';ctx.beginPath();ctx.ellipse(this.x-cameraX+8,this.y+8,6,10,0,0,Math.PI*2);ctx.fill();}get width(){return 16;}get height(){return 16;}}
+
+// ======================== ITEMS ========================
+class Item{
+  constructor(x,y,type){this.x=x;this.y=y;this.w=RT;this.h=RT;this.type=type;this.targetY=y-RT;this.vx=0;this.vy=0;this.active=true;this.spawning=true;}
+  get width(){return this.w;}get height(){return this.h;}
+  update(map){
+    if(this.spawning){this.y-=1;if(this.y<=this.targetY){this.y=this.targetY;this.spawning=false;if(this.type==='MUSHROOM')this.vx=1.8;}return;}
+    if(this.type==='MUSHROOM'){
+      this.vy+=GRAV;this.x+=this.vx;
+      for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid){this.x-=this.vx;this.vx*=-1;break;}
+      this.y+=this.vy;for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid&&this.vy>0){this.y=t.y-this.h;this.vy=0;}
+    }
+  }
+  draw(ctx){
+    if(this.type==='SHELL'){ctx.save();ctx.fillStyle='rgba(0,255,120,.4)';ctx.beginPath();ctx.arc(this.x-cameraX+16,this.y+16,18,0,Math.PI*2);ctx.fill();ctx.drawImage(Sp.koopaS,this.x-cameraX,this.y,this.w,this.h);ctx.restore();return;}
+    const sp={MUSHROOM:Sp.mush,FLOWER:Sp.flower,HAMMER:Sp.hamItem}[this.type]||Sp.mush;
+    ctx.drawImage(sp,this.x-cameraX,this.y,this.w,this.h);
+  }
+}
+
+// ======================== ENEMIES ========================
+class Goomba{constructor(x,y){this.x=x;this.y=y;this.w=RT;this.h=RT;this.vx=-1;this.vy=0;this.alive=true;this.sqTimer=0;this.type='GOOMBA';}get width(){return this.w;}get height(){return this.h;}update(map){if(!this.alive){if(this.sqTimer>0)this.sqTimer--;return;}if(this.x>cameraX+canvas.width+100)return;this.vy+=GRAV;this.x+=this.vx;for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid){this.x-=this.vx;this.vx*=-1;break;}this.y+=this.vy;for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid&&this.vy>0){this.y=t.y-this.h;this.vy=0;}}draw(ctx){if(!this.alive&&this.sqTimer<=0)return;ctx.drawImage(this.alive?Sp.goomba:Sp.goombaSq,this.x-cameraX,this.y,this.w,this.h);}}
+class Koopa{constructor(x,y){this.x=x;this.y=y;this.w=RT;this.h=RT*1.5;this.vx=-1.2;this.vy=0;this.state='WALK';this.alive=true;this.type='KOOPA';}get width(){return this.w;}get height(){return this.h;}update(map){if(!this.alive)return;if(this.x>cameraX+canvas.width+120)return;this.vy+=GRAV;if(this.state==='SHELL_ROLL'){this.w=RT;this.h=RT;}this.x+=this.vx;for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid){this.x-=this.vx;this.vx*=-1;break;}this.y+=this.vy;for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid&&this.vy>0){this.y=t.y-this.h;this.vy=0;}}stomp(){if(this.state==='WALK'){this.state='SHELL_IDLE';this.vx=0;this.h=RT;sound.stomp();}else if(this.state==='SHELL_IDLE'){this.state='SHELL_ROLL';this.vx=mario.x<this.x?7:-7;sound.stomp();}else{this.state='SHELL_IDLE';this.vx=0;sound.stomp();}}draw(ctx){if(!this.alive)return;ctx.drawImage(this.state==='WALK'?Sp.koopaW:Sp.koopaS,this.x-cameraX,this.y,this.w,this.h);}}
+class HammerBro{constructor(x,y){this.x=x;this.y=y;this.w=RT*1.2;this.h=RT*1.5;this.vx=-0.5;this.vy=0;this.alive=true;this.throwT=0;this.jumpT=0;this.type='HAMMER_BRO';}get width(){return this.w;}get height(){return this.h;}update(map){if(!this.alive)return;this.vy+=GRAV;this.x+=this.vx;this.throwT++;if(this.throwT%90===0&&Math.abs(this.x-mario.x)<350){enemyHammers.push(new EnemyHammer(this.x,this.y));sound.hammerThrow();}this.jumpT++;if(this.jumpT%120===0)this.vy=-8;this.y+=this.vy;for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid&&this.vy>0){this.y=t.y-this.h;this.vy=0;}}draw(ctx){if(!this.alive)return;ctx.drawImage(Sp.hamBro,this.x-cameraX,this.y,this.w,this.h);}}
+// class Boo removida
+class Cannon{constructor(x,y){this.x=x;this.y=y;this.w=RT;this.h=RT*1.5;this.alive=true;this.fireT=0;this.type='CANNON';}get width(){return this.w;}get height(){return this.h;}update(){if(!this.alive)return;if(Math.abs(this.x-mario.x)>canvas.width)return;this.fireT++;if(this.fireT%180===0){const dir=mario.x<this.x?-1:1;bulletBills.push(new BulletBill(this.x,this.y+RT*.25,dir));sound.bulletBill();}}draw(ctx){if(!this.alive)return;ctx.fillStyle='#222';ctx.fillRect(this.x-cameraX,this.y,this.w,this.h);ctx.fillStyle='#444';ctx.fillRect(this.x-cameraX+4,this.y,this.w-8,this.h-8);ctx.fillStyle='#111';ctx.beginPath();ctx.arc(this.x-cameraX+this.w/2,this.y+RT*.25,8,0,Math.PI*2);ctx.fill();}}
+
+// ======================== BOWSER BOSS ========================
+class Bowser{
+  constructor(x,y){
+    this.x=x;this.y=y;this.w=48;this.h=60;
+    this.vx=0;this.vy=0;this.hp=5;this.alive=true;this.grounded=false;
+    this.state='INTRO'; // INTRO IDLE WALK JUMP FIRE STUNNED FLIPPED SPIN DEAD
+    this.stateTimer=0;this.fireTimer=0;this.jumpTimer=0;this.phase=0;
+    this.facing='LEFT';this.stunTimer=0;this.deadTimer=0;this.knockback=0;
+    this.flipTimer=0;this.spinTimer=0;this.introTimer=0;
+    this.maxHp=5;
+  }
+  get width(){return this.w;}get height(){return this.h;}
+
+  update(map){
+    if(!this.alive && this.state!=='DEAD')return;
+
+    // ===== INTRO: trava controles e mostra o filho da puta rugindo =====
+    if(this.state==='INTRO'){
+      this.introTimer++;
+      controlsLocked=true;
+      if(this.introTimer===1){sound.bowserRoar();floatTxt(this.x,this.y-40,'BOWSER APARECEU!','#ff4400');}
+      if(this.introTimer>90){sound.bowserRoar();}
+      if(this.introTimer>180){
+        this.state='WALK';
+        this.stateTimer=0;
+        controlsLocked=false;
+        bowserIntroDone=true;
+        floatTxt(this.x,this.y-50,'VAI TOMAR NO CU, MARIO!','#ff0000');
+      }
+      // fica parado no intro
+      this.vy+=GRAV;
+      this.y+=this.vy;
+      for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid&&this.vy>0){this.y=t.y-this.h;this.vy=0;this.grounded=true;}
+      return;
+    }
+
+    if(this.state==='DEAD'){
+      this.deadTimer++;
+      if(this.deadTimer>180){
+        startEndingScene();
+      }
+      return;
+    }
+
+    // ===== FLIPPED: barriga pra cima, vulnerável a stomp, mas perigoso =====
+    if(this.state==='FLIPPED'){
+      this.flipTimer--;
+      this.vy+=GRAV;this.y+=this.vy;
+      for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid&&this.vy>0){this.y=t.y-this.h;this.vy=0;this.grounded=true;}
+      // se Mario pisa nele enquanto flipped = dano
+      if(overlap(mario,this) && mario.vy>1 && mario.y+mario.height-mario.vy <= this.y+25){
+        mario.vy=-9;
+        this.getHit(true); // stomp real
+        sound.stomp();
+        floatTxt(this.x,this.y-20,'STOMP NO CASCO!','#00ff00');
+      } else if(overlap(mario,this) && this.flipTimer < 40){
+        // perto de levantar, se tocar toma dano (casco girando)
+        if(mario.state!=='SHELL'){
+          mario.takeDamage('BOWSER');
+          floatTxt(mario.x,mario.y-10,'CASCO GIRANDO!','#ff4400');
+        }
+      }
+      if(this.flipTimer<=0){
+        // levanta e vira spin por um tempo se ainda vivo
+        if(this.hp>0){
+          this.state='SPIN';
+          this.spinTimer=90;
+          this.vx = mario.x < this.x ? -4.5 : 4.5;
+          sound.bowserRoar();
+          floatTxt(this.x,this.y-30,'CASCO GIRANDO PORRA!','#ff8800');
+        }
+      }
+      return;
+    }
+
+    // ===== SPIN: tipo casco de koopa, corre e fode quem tocar =====
+    if(this.state==='SPIN'){
+      this.spinTimer--;
+      this.vy+=GRAV;
+      this.x+=this.vx;
+      this.y+=this.vy;
+      for(const t of map.tiles(this.x,this.y,this.w,this.h)){
+        if(t.solid){
+          if(Math.abs(this.vx)>0.1){this.x-=this.vx;this.vx*=-1;}
+          if(this.vy>0){this.y=t.y-this.h;this.vy=0;this.grounded=true;}
+        }
+      }
+      if(overlap(mario,this)){
+        if(mario.state==='SHELL'){
+          this.getHit();
+        } else {
+          mario.takeDamage('BOWSER');
+          floatTxt(mario.x,mario.y-10,'TOMOU NO CU!','#ff0000');
+        }
+      }
+      if(this.spinTimer<=0){
+        this.state='WALK';
+        this.vx = mario.x < this.x ? -1.8 : 1.8;
+        this.stateTimer=0;
+      }
+      return;
+    }
+
+    if(this.state==='STUNNED'){
+      this.stunTimer--;this.vy+=GRAV;this.y+=this.vy;
+      for(const t of map.tiles(this.x,this.y,this.w,this.h))if(t.solid&&this.vy>0){this.y=t.y-this.h;this.vy=0;this.grounded=true;}
+      if(this.stunTimer<=0){
+        this.state='WALK';this.vy=0;
+        if(mario.y+mario.height>this.y&&mario.y<this.y+this.h){mario.vy=-8;}
+      }
+      return;
+    }
+
+    this.vy+=GRAV;
+    this.stateTimer++;this.fireTimer++;this.jumpTimer++;
+
+    const dist=Math.abs(mario.x-this.x);
+    this.facing=mario.x<this.x?'LEFT':'RIGHT';
+
+    if(this.state==='IDLE'&&this.stateTimer>40){this.state='WALK';this.stateTimer=0;this.vx=mario.x<this.x?-1.8:1.8;}
+    if(this.state==='WALK'){
+      if(this.stateTimer>100){this.vx*=-1;this.stateTimer=0;}
+      // persegue um pouco
+      if(dist>80) this.vx = mario.x < this.x ? -1.8 : 1.8;
+    }
+    // Pulo agressivo
+    if(this.jumpTimer>110&&this.grounded){
+      this.vy=-15;this.grounded=false;this.jumpTimer=0;this.state='JUMP';
+      sound.bowserRoar();
+    }
+    if(this.state==='JUMP'&&this.grounded){this.state='WALK';}
+
+    // Fogo mais frequente e mais bolas
+    if(this.fireTimer>70&&dist<450){
+      this.fireTimer=0;
+      const baseX=this.x+(this.facing==='LEFT'?0:this.w);
+      bowserFireballs.push(new BowserFireball(baseX,this.y+this.h*.3));
+      bowserFireballs.push(new BowserFireball(baseX,this.y+this.h*.5));
+      bowserFireballs.push(new BowserFireball(baseX,this.y+this.h*.7));
+      sound.fireTrap();
+    }
+
+    this.x+=this.vx;
+    const tilesX=map.tiles(this.x,this.y,this.w,this.h);
+    for(const t of tilesX)if(t.solid){this.x-=this.vx;this.vx*=-1;break;}
+
+    this.y+=this.vy;this.grounded=false;
+    const tilesY=map.tiles(this.x,this.y,this.w,this.h);
+    for(const t of tilesY)if(t.solid&&this.vy>0){this.y=t.y-this.h;this.vy=0;this.grounded=true;}
+
+    // Colisão normal com Mário
+    if(overlap(mario,this)){
+      if(mario.vy>2&&mario.y+mario.height-mario.vy<=this.y+20){
+        // pisa em cima enquanto de pé = ele joga Mario pro alto (pirueta)
+        mario.vy=-11;floatTxt(mario.x,mario.y-10,'ATAQUE DE PIRUETA!','#ff4400');sound.bowserRoar();
+      } else if(mario.state==='SHELL'){
+        this.getHit();
+      } else {
+        mario.takeDamage('BOWSER');
+      }
+    }
+
+    // fireball do Mario
+    for(let i=fireballs.length-1;i>=0;i--){
+      if(fireballs[i].active&&overlap(fireballs[i],this)){
+        fireballs[i].active=false;this.getHit();
+      }
+    }
+    // martelo fode mais
+    for(let i=thrownHammers.length-1;i>=0;i--){
+      if(thrownHammers[i].active&&overlap(thrownHammers[i],this)){
+        thrownHammers[i].active=false;
+        this.getHit();this.getHit();
+      }
+    }
+  }
+
+  getHit(fromStomp=false){
+    if(this.state==='DEAD'||this.state==='INTRO')return;
+    this.hp--;sound.bowserHit();addScore(fromStomp?8000:5000);
+    floatTxt(this.x,this.y-10,fromStomp?'STOMP! -1':'BOWSER -1 HP!','#ff4400');
+    if(this.hp<=0){
+      this.alive=false;this.state='DEAD';this.deadTimer=0;
+      sound.bowserDead();sound.stopBGM();
+      floatTxt(this.x,this.y-40,'BOWSER MORREU PORRA!','#ffff00');
+    } else {
+      this.state='STUNNED';this.stunTimer=70;this.vy=-5;
+      floatTxt(this.x,this.y-25,`HP: ${this.hp}/${this.maxHp}`,'#ff8800');
+    }
+  }
+
+  // Mário bate de baixo na plataforma → Bowser vira de barriga pra cima (FLIPPED)
+  knockFromBelow(){
+    if(this.state==='STUNNED'||this.state==='DEAD'||this.state==='FLIPPED'||this.state==='SPIN'||this.state==='INTRO')return;
+    this.state='FLIPPED';
+    this.flipTimer=160; // tempo vulnerável
+    this.vy=-6;
+    this.vx=0;
+    sound.bowserHit();
+    floatTxt(this.x,this.y-25,'BOWSER VIROU DE BARRIGA!','#ffff00');
+    floatTxt(this.x,this.y-45,'PISA NO CASCO AGORA!','#00ff88');
+    // não tira HP aqui — só vira. HP só no stomp ou hit normal
+  }
+
+  draw(ctx){
+    if(this.state==='DEAD'){
+      ctx.save();ctx.translate(this.x-cameraX+this.w/2,this.y+this.h/2);ctx.rotate(Math.PI);
+      ctx.drawImage(Sp.bowserDead,-this.w/2,-this.h/2,this.w,this.h);ctx.restore();
+      for(let i=0;i<4;i++){
+        const a=Date.now()/200+i*(Math.PI/2);
+        ctx.fillStyle='#ffff00';ctx.beginPath();ctx.arc(this.x-cameraX+this.w/2+Math.cos(a)*28,this.y+this.h*.3+Math.sin(a)*18,6,0,Math.PI*2);ctx.fill();
+      }
+      return;
+    }
+
+    // FLIPPED ou SPIN usa sprite de barriga pra cima / casco
+    if(this.state==='FLIPPED' || this.state==='SPIN'){
+      ctx.save();
+      const cx=this.x-cameraX+this.w/2, cy=this.y+this.h/2;
+      ctx.translate(cx,cy);
+      if(this.state==='SPIN') ctx.rotate(Date.now()/40); // gira rápido
+      else ctx.rotate(Math.PI); // de barriga
+      ctx.drawImage(Sp.bowserDead,-this.w/2,-this.h/2,this.w,this.h);
+      ctx.restore();
+      // aviso visual
+      if(this.state==='FLIPPED'){
+        ctx.fillStyle='rgba(0,255,100,0.4)';
+        ctx.fillRect(this.x-cameraX-4,this.y-8,this.w+8,6);
+      }
+      // HP bar
+      ctx.fillStyle='#000';ctx.fillRect(this.x-cameraX-2,this.y-18,this.w+4,10);
+      ctx.fillStyle=this.hp>=4?'#00cc00':this.hp>=2?'#ffaa00':'#cc0000';
+      ctx.fillRect(this.x-cameraX,this.y-16,((this.hp/this.maxHp)*this.w),6);
+      ctx.strokeStyle='#fff';ctx.strokeRect(this.x-cameraX,this.y-16,this.w,6);
+      return;
+    }
+
+    const flash=(this.state==='STUNNED'||this.state==='INTRO')&&Math.floor(Date.now()/80)%2===0;
+    ctx.save();
+    if(flash)ctx.globalAlpha=0.55;
+    if(this.facing==='RIGHT'){ctx.translate(this.x-cameraX+this.w,this.y);ctx.scale(-1,1);ctx.drawImage(Sp.bowser,0,0,this.w,this.h);}
+    else ctx.drawImage(Sp.bowser,this.x-cameraX,this.y,this.w,this.h);
+    ctx.restore();
+
+    // HP bar
+    ctx.fillStyle='#000';ctx.fillRect(this.x-cameraX-2,this.y-14,this.w+4,10);
+    ctx.fillStyle=this.hp>=4?'#00cc00':this.hp>=2?'#ffaa00':'#cc0000';
+    ctx.fillRect(this.x-cameraX,this.y-12,((this.hp/this.maxHp)*this.w),6);
+    ctx.strokeStyle='#fff';ctx.strokeRect(this.x-cameraX,this.y-12,this.w,6);
+
+    // texto de intro
+    if(this.state==='INTRO'){
+      ctx.fillStyle='#ff4400';
+      ctx.font='bold 10px "Press Start 2P"';
+      ctx.fillText('BOWSER!',this.x-cameraX-10,this.y-30);
+    }
+  }
+}
+
+// ======================== FIRE TRAP ========================
+class FireTrap{
+  constructor(x,y){this.x=x;this.y=y;this.w=RT*.6;this.h=RT*.6;this.active=true;this.phase=Math.random()*Math.PI*2;this.size=0.5;}
+  get width(){return this.w;}get height(){return this.h;}
+  update(){this.phase+=0.05;this.size=0.6+Math.sin(this.phase)*.4;}
+  draw(ctx){
+    const r=16*this.size;
+    ctx.save();ctx.fillStyle='rgba(255,80,0,.85)';ctx.beginPath();ctx.arc(this.x-cameraX,this.y,r,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,220,0,.7)';ctx.beginPath();ctx.arc(this.x-cameraX,this.y,r*.5,0,Math.PI*2);ctx.fill();ctx.restore();
+  }
+}
+
+// ======================== MAP ========================
+class LevelMap{
+  constructor(idx){
+    this.cols=idx===5?120:160;this.rows=14;
+    this.grid=Array(this.rows).fill(null).map(()=>Array(this.cols).fill(0));
+    this.blockData={};this.idx=idx;
+    this.bowserPlatforms=[];
+    this.build(idx);
+  }
+  build(idx){
+    const holes=[[],[28,29,65,66],[40,41,80,81],[30,31,55,56,90],[60,61,62,95,96,97],[45,46,75,76,110,111],[]];
+    const hset=new Set(holes[idx]||[]);
+    for(let c=0;c<this.cols;c++){if(!hset.has(c)){this.grid[12][c]=1;this.grid[13][c]=1;}}
+
+    const configs=[
+      ()=>{this.qb(10,8,'HAMMER');this.qb(14,8,'COIN');this.qb(18,8,'MUSHROOM');this.qb(35,8,'FLOWER');this.qb(55,6,'HAMMER');this.brick(13,8);this.brick(15,8);this.brick(17,8);this.brick(48,8);this.brick(49,8);this.pipe(20,10,2);this.pipe(38,9,3);this.pipe(52,8,4);this.plat(75,9,5);this.flag(145);},
+      ()=>{this.qb(12,8,'HAMMER');this.qb(25,8,'FLOWER');this.qb(65,8,'MUSHROOM');this.qb(95,8,'FLOWER');this.qb(120,8,'MUSHROOM');this.brick(20,8);this.brick(21,8);this.brick(22,8);this.brick(55,8);this.brick(56,8);this.brick(85,7);this.brick(86,7);this.pipe(18,9,3);this.pipe(35,8,4);this.pipe(70,9,3);this.pipe(110,8,4);this.flag(145);},
+      ()=>{this.qb(15,8,'HAMMER');this.qb(35,8,'HAMMER');this.qb(60,8,'FLOWER');this.qb(80,7,'MUSHROOM');this.qb(100,8,'HAMMER');this.qb(125,8,'MUSHROOM');this.brick(25,8);this.brick(45,8);this.brick(75,8);this.pipe(22,9,3);this.pipe(55,8,4);this.pipe(82,9,3);this.plat(95,7,4);this.plat(115,8,3);this.plat(135,7,4);this.flag(145);},
+      ()=>{this.qb(10,8,'FLOWER');this.qb(30,8,'MUSHROOM');this.qb(50,6,'HAMMER');this.qb(70,8,'FLOWER');this.qb(95,7,'SHELL');this.qb(120,8,'MUSHROOM');for(let r=4;r<12;r++){this.grid[r][45]=2;this.grid[r][46]=2;}for(let r=4;r<12;r++){this.grid[r][88]=2;this.grid[r][89]=2;}this.brick(20,8);this.brick(21,8);this.brick(60,8);this.brick(61,8);this.pipe(35,9,4);this.pipe(75,8,5);this.pipe(105,9,4);this.plat(115,7,6);this.flag(145);},
+      ()=>{this.qb(8,6,'HAMMER');this.qb(20,8,'HAMMER');this.qb(35,7,'FLOWER');this.qb(55,8,'MUSHROOM');this.qb(78,6,'FLOWER');this.qb(100,8,'SHELL');this.qb(120,7,'MUSHROOM');this.qb(138,8,'FLOWER');this.plat(40,6,3);this.plat(65,7,4);this.plat(90,5,3);this.plat(110,7,5);this.plat(130,6,4);this.brick(25,8);this.brick(26,8);this.brick(50,7);this.brick(51,7);this.pipe(18,9,5);this.pipe(45,8,6);this.pipe(72,9,5);this.pipe(115,8,5);this.flag(148);},
+      // CASTELO DO BOWSER — arena foda com 3 plataformas na direita
+      ()=>{
+        // Chão completo
+        for(let c=0;c<this.cols;c++){this.grid[12][c]=1;this.grid[13][c]=1;}
+        // Paredes laterais do castelo
+        for(let r=0;r<13;r++){this.grid[r][0]=2;this.grid[r][1]=2;this.grid[r][this.cols-1]=2;this.grid[r][this.cols-2]=2;}
+        // Parede direita da arena (perto do Bowser)
+        for(let r=0;r<12;r++){this.grid[r][95]=2;this.grid[r][96]=2;}
+        // Entrada / corredor com alguns blocos
+        for(let r=8;r<12;r++){this.grid[r][8]=2;this.grid[r][9]=2;}
+        // Plataformas da arena (3 principais perto da parede direita + 2 de apoio)
+        this.bowserPlatforms=[
+          // plataforma baixa esquerda da arena
+          {x:55*RT,y:9*RT,w:5*RT,h:RT,destroyed:false,shakeT:0},
+          // plataforma do meio
+          {x:68*RT,y:7*RT,w:5*RT,h:RT,destroyed:false,shakeT:0},
+          // plataforma alta perto da parede (a principal pra derrubar o Bowser)
+          {x:82*RT,y:6*RT,w:6*RT,h:RT,destroyed:false,shakeT:0},
+          // plataforma extra de apoio
+          {x:75*RT,y:9*RT,w:4*RT,h:RT,destroyed:false,shakeT:0},
+          // chão elevado pequeno
+          {x:48*RT,y:10*RT,w:3*RT,h:RT,destroyed:false,shakeT:0},
+        ];
+        // Blocos ? válidos (row 0-13)
+        this.qb(12,8,'HAMMER');
+        this.qb(22,7,'MUSHROOM');
+        this.qb(32,8,'FLOWER');
+        this.qb(42,6,'HAMMER');
+        this.qb(58,5,'MUSHROOM');
+        this.qb(70,4,'FLOWER');
+        // Armadilhas de fogo no chão do corredor e arena
+        fireTrap.push(new FireTrap(18*RT,11.5*RT));
+        fireTrap.push(new FireTrap(28*RT,11.5*RT));
+        fireTrap.push(new FireTrap(38*RT,11.5*RT));
+        fireTrap.push(new FireTrap(50*RT,11.5*RT));
+        fireTrap.push(new FireTrap(62*RT,11.5*RT));
+        fireTrap.push(new FireTrap(78*RT,11.5*RT));
+      }
+    ];
+    (configs[idx]||configs[0])();
+  }
+
+  tiles(x,y,w,h){
+    const res=[];
+    const sc=Math.floor(x/RT),ec=Math.floor((x+Math.max(0,w-.1))/RT);
+    const sr=Math.floor(y/RT),er=Math.floor((y+Math.max(0,h-.1))/RT);
+    for(let r=sr;r<=er;r++)for(let c=sc;c<=ec;c++){
+      if(r<0||r>=this.rows||c<0||c>=this.cols)continue;
+      const t=this.grid[r][c];
+      if(t!==0&&t!==9){res.push({gx:c,gy:r,x:c*RT,y:r*RT,w:RT,h:RT,solid:true});}
+      else if(t===9&&mario.x+mario.width>=c*RT){advanceLevel();}
+    }
+    // Plataformas do Bowser (fase 5)
+    if(this.idx===5&&this.bowserPlatforms){
+      for(const p of this.bowserPlatforms){
+        if(p.destroyed)continue;
+        if(x<p.x+p.w&&x+w>p.x&&y<p.y+p.h&&y+h>p.y){
+          res.push({gx:-1,gy:-1,x:p.x,y:p.y,w:p.w,h:p.h,solid:true,isBowserPlat:true,plat:p});
+        }
+      }
+    }
+    return res;
+  }
+
+  hitBlock(gx,gy,player){
+    // Verificar se bateu embaixo de plataforma do Bowser → vira ele de barriga
+    if(this.idx===5&&this.bowserPlatforms&&bowser){
+      for(const p of this.bowserPlatforms){
+        if(!p.destroyed && player.x < p.x+p.w && player.x+player.width > p.x){
+          // Mario bateu de baixo na plataforma (y do Mario perto do fundo da plat)
+          const hitFromBelow = player.y + player.height >= p.y - 8 && player.y < p.y + p.h + 10;
+          if(hitFromBelow){
+            // Bowser está em cima da plataforma?
+            if(bowser.x < p.x+p.w && bowser.x+bowser.w > p.x && bowser.y + bowser.h <= p.y + 12 && bowser.y + bowser.h >= p.y - 20){
+              bowser.knockFromBelow();
+              p.shakeT=40;
+            } else {
+              p.shakeT=15; // só treme se não tem Bowser
+            }
+            return;
+          }
+        }
+      }
+    }
+    const key=`${gy}_${gx}`,t=this.grid[gy][gx];
+    if(t===3){const d=this.blockData[key];if(d&&!d.used){d.used=true;this.grid[gy][gx]=8;if(d.content==='COIN'){sound.coin();addCoin();addScore(200);popCoins.push(new PopCoin(gx*RT,(gy-1)*RT));}else{sound.powerupSpawn();items.push(new Item(gx*RT,gy*RT,d.content));}}}
+    else if(t===2){if(player.state!=='SMALL'){this.grid[gy][gx]=0;sound.brickBreak();addScore(50);}else sound.stomp();}
+  }
+
+  qb(c,r,content){this.grid[r][c]=3;this.blockData[`${r}_${c}`]={content,used:false};}
+  brick(c,r){this.grid[r][c]=2;}
+  pipe(col,startR,height){this.grid[startR][col]=4;this.grid[startR][col+1]=5;for(let h=1;h<height;h++){this.grid[startR+h][col]=6;this.grid[startR+h][col+1]=7;}}
+  plat(col,row,len){for(let i=0;i<len;i++)this.grid[row][col+i]=1;}
+  flag(col){for(let r=3;r<=11;r++)this.grid[r][col]=9;}
+
+  draw(ctx){
+    const bgColors=['#5c94fc','#000088','#5c94fc','#220011','#0a0033','#110000'];
+    ctx.fillStyle=bgColors[this.idx]||'#5c94fc';ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    if(this.idx===5){
+      // Efeito de lava no fundo do castelo
+      const t=Date.now()/300;
+      for(let i=0;i<8;i++){ctx.fillStyle=`rgba(255,${40+Math.floor(Math.abs(Math.sin(t+i))*60)},0,0.15)`;ctx.fillRect(i*70,canvas.height-30+Math.sin(t+i)*8,80,40);}
+    }
+
+    const sc=Math.max(0,Math.floor(cameraX/RT)),ec=Math.min(this.cols,sc+Math.ceil(canvas.width/RT)+2);
+    for(let r=0;r<this.rows;r++)for(let c=sc;c<ec;c++){
+      const t=this.grid[r][c],dx=c*RT-cameraX,dy=r*RT;
+      if(t===1){ctx.fillStyle=this.idx===1?'#000088':this.idx===3?'#553300':this.idx===5?'#330000':'#c84c0c';ctx.fillRect(dx,dy,RT,RT);ctx.strokeStyle='#000';ctx.strokeRect(dx,dy,RT,RT);}
+      else if(t===2){ctx.fillStyle=this.idx===5?'#444':'#b84418';ctx.fillRect(dx,dy,RT,RT);ctx.strokeStyle='#000';ctx.strokeRect(dx,dy,RT,RT);}
+      else if(t===3){ctx.fillStyle='#fcb014';ctx.fillRect(dx,dy,RT,RT);ctx.strokeStyle='#000';ctx.strokeRect(dx,dy,RT,RT);ctx.fillStyle='#000';ctx.font='bold 16px "Press Start 2P"';ctx.fillText('?',dx+8,dy+24);}
+      else if(t===8){ctx.fillStyle='#808080';ctx.fillRect(dx,dy,RT,RT);ctx.strokeStyle='#000';ctx.strokeRect(dx,dy,RT,RT);}
+      else if(t>=4&&t<=7){ctx.fillStyle=(t===4||t===6)?'#58d854':'#007000';ctx.fillRect(dx,dy,RT,RT);ctx.strokeStyle='#000';ctx.strokeRect(dx,dy,RT,RT);}
+      else if(t===9){ctx.fillStyle='#f8f8f8';ctx.fillRect(dx+12,dy,8,RT);if(r===3){ctx.fillStyle='#00a800';ctx.beginPath();ctx.arc(dx+16,dy+8,12,0,Math.PI*2);ctx.fill();}}
+    }
+    // Plataformas do Bowser
+    if(this.idx===5&&this.bowserPlatforms){
+      for(const p of this.bowserPlatforms){
+        if(p.destroyed)continue;
+        const shake=p.shakeT>0?Math.sin(p.shakeT*.8)*3:0;if(p.shakeT>0)p.shakeT--;
+        ctx.fillStyle='#553311';ctx.fillRect(p.x-cameraX+shake,p.y,p.w,p.h);
+        ctx.strokeStyle='#000';ctx.strokeRect(p.x-cameraX+shake,p.y,p.w,p.h);
+      }
+    }
+  }
+}
+
+// ======================== ENDING SCENE ========================
+function startEndingScene(){
+  gameState='ENDING';
+  endingScene={phase:'WALK',timer:0,marioX:mario.x,peachX:80*RT,door:{open:false,openAmount:0},textOpacity:0};
+}
+
+function updateEnding(){
+  if(!endingScene)return;
+  endingScene.timer++;
+  const es=endingScene;
+  if(es.phase==='WALK'){
+    // Mário anda até a porta
+    if(es.marioX<es.peachX-RT*2){es.marioX+=1.5;}
+    else{es.phase='DOOR';es.timer=0;}
+  } else if(es.phase==='DOOR'){
+    es.door.open=true;es.door.openAmount=Math.min(1,es.door.openAmount+0.02);
+    if(es.timer>80){es.phase='PEACH';es.timer=0;}
+  } else if(es.phase==='PEACH'){
+    es.textOpacity=Math.min(1,es.textOpacity+0.02);
+    if(es.timer>240){
+      // Vitória!
+      gameState='VICTORY';
+      showOverlay('🎉 VOCÊ SALVOU PEACH!',`Pontuação Final: ${score} pts!\n\nO Reino Cogumelo está a salvo!\n\n--- CRÉDITOS ---\nDesenvolvedor: Augusto Miguel de Farias\n\nIsso é uma fãgame feita por diversão.`,'▶ JOGAR NOVAMENTE');
+      sound.victory();
+    }
+  }
+}
+
+function drawEnding(){
+  const es=endingScene;if(!es)return;
+  // Fundo do castelo final
+  ctx.fillStyle='#220011';ctx.fillRect(0,0,canvas.width,canvas.height);
+  // Chão
+  ctx.fillStyle='#553300';for(let c=0;c<canvas.width;c+=RT){ctx.fillRect(c,12*RT,RT,2*RT);ctx.strokeStyle='#000';ctx.strokeRect(c,12*RT,RT,2*RT);}
+
+  const marioScreenX=es.marioX-cameraX;
+  // Mário andando
+  ctx.drawImage(es.timer%20<10?Sp.mBW:Sp.mBS,marioScreenX,11*RT,RT,RT*2);
+
+  // Porta da Peach
+  const doorX=es.peachX-cameraX;
+  ctx.fillStyle='#442200';ctx.fillRect(doorX,8*RT,RT*2.5,4*RT);
+  ctx.fillStyle='#000';
+  if(es.door.open){
+    // Porta abrindo
+    const w=RT*2.5*(1-es.door.openAmount);
+    ctx.fillStyle='#220000';ctx.fillRect(doorX,8*RT,RT*2.5,4*RT);
+    if(w>0){ctx.fillStyle='#442200';ctx.fillRect(doorX,8*RT,w,4*RT);}
+  } else {
+    ctx.fillStyle='#442200';ctx.fillRect(doorX,8*RT,RT*2.5,4*RT);
+  }
+  ctx.strokeStyle='#ffcc00';ctx.lineWidth=3;ctx.strokeRect(doorX,8*RT,RT*2.5,4*RT);ctx.lineWidth=1;
+
+  // Peach (aparece depois que a porta abre)
+  if(es.phase==='PEACH'){
+    ctx.save();ctx.globalAlpha=es.textOpacity;
+    ctx.drawImage(Sp.peach,doorX+4,8.5*RT,36,48);
+    // Texto de vitória
+    ctx.fillStyle='rgba(255,220,100,'+es.textOpacity+')';
+    ctx.font='bold 12px "Press Start 2P"';
+    const t1='OBRIGADO, MARIO!';const t2='VOCÊ SALVOU O';const t3='REINO COGUMELO!';
+    ctx.fillText(t1,canvas.width/2-ctx.measureText(t1).width/2,2*RT);
+    ctx.font='9px "Press Start 2P"';
+    ctx.fillStyle='rgba(255,255,255,'+es.textOpacity+')';
+    ctx.fillText(t2,canvas.width/2-ctx.measureText(t2).width/2,3*RT+10);
+    ctx.fillText(t3,canvas.width/2-ctx.measureText(t3).width/2,4*RT);
+
+    // Peach fala
+    ctx.fillStyle='rgba(255,180,220,'+es.textOpacity+')';
+    ctx.font='8px "Press Start 2P"';
+    const msg='Princesa Peach: MARIO! ♥';
+    ctx.fillText(msg,doorX-20,7.5*RT);
+    ctx.restore();
+  }
+}
+
+// ======================== GAME LOGIC ========================
+const mario=new Mario();
+let map=new LevelMap(0);
+
+function spawnEnemies(lvl){
+  enemies=[];bulletBills=[];bowserFireballs=[];bowser=null;
+  // fireTrap é limpo no startLevel e preenchido no build da fase 5
+  const configs=[
+    ()=>{enemies=[new Goomba(400,300),new Koopa(600,280),new Goomba(850,300),new Koopa(1100,280),new Goomba(1400,300)];},
+    ()=>{enemies=[new Koopa(350,280),new Goomba(500,300),new Koopa(700,280),new Koopa(900,280),new Goomba(1200,300)];},
+    ()=>{enemies=[new HammerBro(450,260),new Koopa(650,280),new HammerBro(900,260),new Koopa(1150,280),new HammerBro(1350,260),new Cannon(2000,250)];},
+    ()=>{enemies=[new HammerBro(400,260),new Koopa(750,280),new HammerBro(900,260),new Cannon(1400,250),new HammerBro(1600,260)];},
+    ()=>{enemies=[new HammerBro(500,260),new Cannon(750,250),new Koopa(1050,280),new HammerBro(1200,260),new Cannon(1450,250),new HammerBro(1800,260),new Cannon(2100,250)];},
+    ()=>{
+      // Fase do Bowser: corredor cheio de porra + arena
+      enemies=[
+        new Goomba(350,350),new Goomba(480,350),
+        new Koopa(600,340),new HammerBro(750,280),
+        new Goomba(900,350),new Koopa(1050,340),
+        new HammerBro(1200,280),new Cannon(1400,300),
+        new Goomba(1550,350),new Koopa(1700,340),
+        new HammerBro(1850,280),new Cannon(2000,300)
+      ];
+      // Bowser na arena direita, começa em INTRO
+      bowser=new Bowser(85*RT,5*RT);
+      bowserIntroDone=false;
+      controlsLocked=false;
+    }
+  ];
+  (configs[lvl]||configs[0])();
+}
+
+function updateGame(){
+  if(gameState==='ENDING'){updateEnding();return;}
+  if(gameState!=='PLAYING')return;
+  mario.update(map);
+  if(mario.x-cameraX>canvas.width*.45)cameraX=mario.x-canvas.width*.45;
+
+  items.forEach((it,i)=>{it.update(map);if(!it.spawning&&overlap(mario,it)){mario.powerUp(it.type);items.splice(i,1);}});
+  fireTrap.forEach(ft=>ft.update());
+
+  // Fireballs
+  for(let i=fireballs.length-1;i>=0;i--){const fb=fireballs[i];fb.update(map);if(!fb.active){fireballs.splice(i,1);continue;}for(const e of enemies){if(e.alive&&overlap(fb,e)){e.alive=false;fb.active=false;sound.stomp();addScore(200);}}}
+  // Martelos
+  for(let i=thrownHammers.length-1;i>=0;i--){const th=thrownHammers[i];th.update(map);if(!th.active){thrownHammers.splice(i,1);continue;}for(const e of enemies){if(e.alive&&overlap(th,e)){e.alive=false;th.active=false;sound.stomp();addScore(500);floatTxt(e.x,e.y,'500','#ffcc00');if(e.type==='HAMMER_BRO')items.push(new Item(e.x,e.y,'SHELL'));}}}
+  // Bullet Bills
+  for(let i=bulletBills.length-1;i>=0;i--){const bb=bulletBills[i];bb.update(map);if(!bb.active){bulletBills.splice(i,1);continue;}let hit=false;for(const fb of fireballs)if(fb.active&&overlap(fb,bb)){fb.active=false;bb.active=false;addScore(200);hit=true;break;}for(const th of thrownHammers)if(th.active&&overlap(th,bb)){th.active=false;bb.active=false;addScore(300);hit=true;break;}if(!hit&&overlap(mario,bb)){if(mario.state==='SHELL'){bb.active=false;addScore(500);}else mario.takeDamage('BULLET');}}
+  // Martelos inimigos
+  for(let i=enemyHammers.length-1;i>=0;i--){const eh=enemyHammers[i];eh.update();if(!eh.active){enemyHammers.splice(i,1);continue;}if(overlap(mario,eh)){eh.active=false;mario.state==='SHELL'?addScore(200):mario.takeDamage('HAMMER');}}
+  // Firebolas do Bowser
+  for(let i=bowserFireballs.length-1;i>=0;i--){const bf=bowserFireballs[i];bf.update();if(!bf.active){bowserFireballs.splice(i,1);continue;}if(overlap(mario,bf)){if(mario.crouching){floatTxt(mario.x,mario.y-10,'AGACHOU!','#00ff88');bf.active=false;}else if(mario.state==='SHELL'){bf.active=false;addScore(300);}else{bf.active=false;mario.takeDamage('FIRE');}}}
+  // Armadilhas de fogo
+  for(const ft of fireTrap){if(overlap(mario,ft)&&mario.state!=='SHELL'){mario.takeDamage('FIRE');}}
+  // Bowser
+  if(bowser)bowser.update(map);
+  // Inimigos normais
+  for(const e of enemies){
+    e.update(map);if(!e.alive)continue;
+    if(e.type==='CANNON')continue;
+    if(e.type==='KOOPA'&&e.state==='SHELL_ROLL'){for(const o of enemies){if(o!==e&&o.alive&&overlap(e,o)){o.alive=false;addScore(300);}}}
+    if(!overlap(mario,e))continue;
+    if(mario.state==='SHELL'){e.alive=false;sound.stomp();addScore(1000);floatTxt(e.x,e.y,'1000!','#ffff00');if(e.type==='HAMMER_BRO')items.push(new Item(e.x,e.y,'SHELL'));continue;}
+    if(mario.vy>0&&mario.y+mario.height-mario.vy<=e.y+16){
+      if(e.type==='KOOPA'){e.stomp();}else{e.alive=false;e.sqTimer=15;if(e.type==='HAMMER_BRO')items.push(new Item(e.x,e.y,'SHELL'));}
+      mario.vy=-7;sound.stomp();addScore(100);
+    } else {
+      if(e.type==='KOOPA'&&e.state==='SHELL_IDLE')e.stomp();else mario.takeDamage('NORMAL');
+    }
+  }
+  popCoins.forEach((pc,i)=>{pc.update();if(!pc.active)popCoins.splice(i,1);});
+  floatingTexts.forEach((ft,i)=>{ft.y-=1;ft.life--;if(ft.life<=0)floatingTexts.splice(i,1);});
+}
+
+function drawGame(){
+  if(gameState==='ENDING'){drawEnding();return;}
+  map.draw(ctx);
+  fireTrap.forEach(ft=>ft.draw(ctx));
+  items.forEach(it=>it.draw(ctx));
+  popCoins.forEach(pc=>pc.draw(ctx));
+  fireballs.forEach(fb=>fb.draw(ctx));
+  thrownHammers.forEach(th=>th.draw(ctx));
+  enemyHammers.forEach(eh=>eh.draw(ctx));
+  bulletBills.forEach(bb=>bb.draw(ctx));
+  bowserFireballs.forEach(bf=>bf.draw(ctx));
+  enemies.forEach(e=>e.draw(ctx));
+  if(bowser)bowser.draw(ctx);
+  mario.draw(ctx);
+  floatingTexts.forEach(ft=>{ctx.save();ctx.fillStyle=ft.color||'#fff';ctx.font='bold 9px "Press Start 2P"';ctx.fillText(ft.text,ft.x-cameraX,ft.y);ctx.restore();});
+
+  // Boss HP
+  if(bowser&&bowser.alive&&gameState==='PLAYING'){
+    ctx.fillStyle='rgba(0,0,0,.7)';ctx.fillRect(10,canvas.height-30,220,22);
+    const maxH=bowser.maxHp||5;
+    ctx.fillStyle=bowser.hp>=4?'#00cc00':bowser.hp>=2?'#ffaa00':'#cc0000';
+    ctx.fillRect(12,canvas.height-28,(bowser.hp/maxH)*196,16);
+    ctx.strokeStyle='#fff';ctx.strokeRect(12,canvas.height-28,196,16);
+    ctx.fillStyle='#fff';ctx.font='8px "Press Start 2P"';ctx.fillText('BOWSER '+bowser.hp+'/'+maxH,14,canvas.height-15);
+  }
+}
+
+function gameLoop(){updateGame();drawGame();requestAnimationFrame(gameLoop);}
+
+function advanceLevel(){
+  if(gameState!=='PLAYING')return;
+  currentLevel++;
+  if(currentLevel>=6){return;}// não deve chegar aqui; Bowser controla a vitória
+  startLevel(currentLevel);
+}
+
+function startLevel(idx){
+  currentLevel=idx;
+  document.getElementById('worldDisplay').innerText=idx===5?'8-4':`1-${idx+1}`;
+  cameraX=0;timeRemaining=idx===5?0:400-idx*20;
+  mario.x=50;mario.y=idx===5?10*RT:300;mario.vx=0;mario.vy=0;mario.crouching=false;
+  map=new LevelMap(idx);
+  items=[];fireballs=[];thrownHammers=[];enemyHammers=[];bulletBills=[];bowserFireballs=[];fireTrap=[];popCoins=[];floatingTexts=[];endingScene=null;
+  controlsLocked=false;bowserIntroDone=false;
+  spawnEnemies(idx);
+  sound.startBGM(idx);
+  if(idx===5){document.getElementById('timer').innerText='∞';clearInterval(timerInterval);}
+}
+
+function showOverlay(title,sub,btn){
+  document.getElementById('overlayTitle').innerText=title;
+  document.getElementById('overlaySubtitle').innerText=sub;
+  document.getElementById('startBtn').innerText=btn;
+  document.getElementById('overlay').classList.remove('hidden');
+}
+
+function startGame(){
+  sound.init();score=0;coins=0;addScore(0);mario.reset();startLevel(0);
+  document.getElementById('overlay').classList.add('hidden');
+  gameState='PLAYING';
+  if(timerInterval)clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{if(gameState==='PLAYING'&&currentLevel<5){timeRemaining--;document.getElementById('timer').innerText=String(timeRemaining).padStart(3,'0');if(timeRemaining<=0)mario.die();}},1000);
+}
+
+function actionTrigger(){
+  if(gameState!=='PLAYING'||controlsLocked)return;
+  if(mario.state==='HAMMER'&&thrownHammers.length<3){thrownHammers.push(new Hammer(mario.x+(mario.facing==='RIGHT'?16:-10),mario.y,mario.facing));sound.hammerThrow();}
+  else if(mario.state==='FIRE'&&fireballs.length<2){fireballs.push(new Fireball(mario.x+(mario.facing==='RIGHT'?mario.width:-10),mario.y+10,mario.facing));sound.fireball();}
+}
+
+// Controles de teclado
+window.addEventListener('keydown',e=>{
+  if(['ArrowLeft','a','A'].includes(e.key))keys.left=true;
+  if(['ArrowRight','d','D'].includes(e.key))keys.right=true;
+  if(['ArrowUp','z','Z',' '].includes(e.key)){keys.jump=true;e.preventDefault();}
+  if(['ArrowDown','s','S'].includes(e.key))keys.down=true;
+  if(['x','X','Shift'].includes(e.key)){keys.run=true;actionTrigger();}
+});
+window.addEventListener('keyup',e=>{
+  if(['ArrowLeft','a','A'].includes(e.key))keys.left=false;
+  if(['ArrowRight','d','D'].includes(e.key))keys.right=false;
+  if(['ArrowUp','z','Z',' '].includes(e.key))keys.jump=false;
+  if(['ArrowDown','s','S'].includes(e.key))keys.down=false;
+  if(['x','X','Shift'].includes(e.key))keys.run=false;
+});
+
+// Touch controls
+const setupBtn=(id,k,isAction=false)=>{
+  const btn=document.getElementById(id);if(!btn)return;
+  const start=e=>{e.preventDefault();keys[k]=true;if(isAction)actionTrigger();};
+  const end=e=>{e.preventDefault();keys[k]=false;};
+  btn.addEventListener('touchstart',start,{passive:false});btn.addEventListener('touchend',end,{passive:false});
+  btn.addEventListener('mousedown',start);btn.addEventListener('mouseup',end);btn.addEventListener('mouseleave',end);
+};
+setupBtn('btnLeft','left');setupBtn('btnRight','right');setupBtn('btnJump','jump');setupBtn('btnRun','run',true);setupBtn('btnDown','down');
+document.getElementById('startBtn').addEventListener('click',startGame);
+window.onload=()=>requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
