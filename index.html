@@ -830,7 +830,7 @@ function updateEnding(){
     if(es.timer>240){
       // Vitória!
       gameState='VICTORY';
-      showOverlay('🎉 VOCÊ SALVOU PEACH!',`Pontuação Final: ${score} pts!\n\nO Reino Cogumelo está a salvo!\n\n--- CRÉDITOS ---\nDesenvolvedor: Augusto Miguel de Farias\n\nIsso é uma fãgame feita por diversão.`,'▶ JOGAR NOVAMENTE');
+      showOverlay('🎉 VOCÊ SALVOU PEACH!',`Pontuação Final: ${score} pts!\n\nO Reino Cogumelo está a salvo!\n\n--- CRÉDITOS ---\nDesenvolvedor: Augusto Miguel de Farias\nSprites Bowser (sheet): Silver (Silverbolt) + A.J. Nitro\n\nIsso é uma fãgame feita por diversão.`,'▶ JOGAR NOVAMENTE');
       sound.victory();
     }
   }
@@ -1056,4 +1056,4 @@ document.getElementById('startBtn').addEventListener('click',startGame);
 window.onload=()=>requestAnimationFrame(gameLoop);
 </script>
 </body>
-</html>
+  </html>
