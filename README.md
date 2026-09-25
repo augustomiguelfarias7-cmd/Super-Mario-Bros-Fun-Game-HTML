@@ -21,7 +21,7 @@ Abra o arquivo `index.html` no navegador (Chrome, Firefox, Edge etc).
 - Touch controls e Gamepad também funcionam
 
 ### Boss Bowser
-Pule **embaixo** das plataformas para virar o Bowser de barriga pra cima, depois pise no casco. Cuidado que ele gira e te fode se você demorar!
+Pule **embaixo** das plataformas para virar o Bowser de barriga pra cima, depois pise no casco. Cuidado que ele gira e te faz perder dano se você demorar!
 
 ## Power-ups
 - Cogumelo (Big)
